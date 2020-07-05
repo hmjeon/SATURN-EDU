@@ -59,10 +59,10 @@ function Plane_Stiffness(Young, Poisson, thick, node) result(Ke)
     double precision, intent(in) :: node(nNPE,nDIM)
 
     double precision :: Ke(nNPE*nDPN, nNPE*nDPN)
-    double precision :: r, s, weight           ! Integration point, weight factor
-    double precision :: det_j                  ! Determinant of Jacobian
-    double precision :: B(3, nNPE*nDPN)        ! B-matrix (strain-displacement matrix)
-    double precision :: C(3,3)                 ! Material matrix (material law)
+    double precision :: r, s, weight        ! Integration point, weight factor
+    double precision :: det_j               ! Determinant of Jacobian
+    double precision :: B(3, nNPE*nDPN)     ! B-matrix (strain-displacement matrix)
+    double precision :: C(3,3)              ! Material matrix (material law)
     integer :: i, j
 
     ! Material matrix

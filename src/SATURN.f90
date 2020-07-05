@@ -53,7 +53,7 @@ subroutine Main()
     integer :: m_hbw                        ! Maximum half bandwidth
 
     ! Open files
-    open(unit=1, file="input.txt",     form="formatted")
+    open(unit=1, file="input.txt",      form="formatted")
     open(unit=2, file="SATURN_out.txt", form="formatted")
     open(unit=3, file="SATURN_res.txt", form="formatted")
     open(unit=4, file="SATURN_pos.txt", form="formatted")
