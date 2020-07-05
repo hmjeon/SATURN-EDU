@@ -26,7 +26,18 @@
 *.a
 *.lib
 
+build/My Advisor Results - MERCURY-MITC6
+build/Debug
+build/Release
+build/x64
+build/output
+
 # Executables
 *.exe
 *.out
 *.app
+*.u2d
+.vs
+*.11
+*.101
+fort.*

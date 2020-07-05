@@ -1,10 +1,26 @@
-
-! --------------------------------------------------------------------------------
-!            Module for defining user-defined types
-!            - created by Phill-Seung Lee, 19/Feb/1998 
-!            - FORTRAN 95
-! --------------------------------------------------------------------------------
-
+!
+! =============================================================================
+!
+! Data_Struct
+! Computational Systems Design Laboratory(CSDL)
+! by Hyungmin Jun(hjun@jbnu.ac.kr)
+!
+! =============================================================================
+!
+! Copyright 2020 CSDL. All rights reserved.
+!
+! License - GPL version 3
+! This program is free software: you can redistribute it and/or modify it under
+! the terms of the GNU General Public License as published by the Free Software
+! Foundation, either version 3 of the License, or any later version.
+! This program is distributed in the hope that it will be useful, but WITHOUT
+! ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+! FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+! You should have received a copy of the GNU General Public License along with
+! this program. If not, see <http://www.gnu.org/licenses/>.
+!
+! -----------------------------------------------------------------------------
+!
 module Data_Struct
 
     integer, parameter :: nNPE = 4      ! # of nodes per element
@@ -12,26 +28,35 @@ module Data_Struct
     integer, parameter :: nDIM = 2      ! Problem dimension
     integer, parameter :: nGP  = 2      ! # of Gauss points
 
+    ! Problem structure
+    type :: ProbType
+        character(100) :: name = trim("SATURN")
+        character(100) :: path
+        integer        :: n_prob
+        integer        :: n_domain
+    end type
 
-    ! define a type for node
+    ! NodeType structure
     type :: NodeType
-        double precision :: x(2)       ! nodal position (x, y), nDIM
-        double precision :: pm(2)      ! nodal force (Px, Py), nDPN
-        integer          :: bc(2)      ! displacement BC (u, v) (1=fixed, 0=free), nDPN
-        integer          :: eq_n(2)    ! equation number (u, v), nDPN
+        double precision :: x(nDIM)     ! Nodal position (x, y)
+        double precision :: pm(nDPN)    ! Nodal force (Px, Py)
+        integer          :: bc(nDPN)    ! Displacement BC (u, v) (1=fixed, 0=free)
+        integer          :: eq_n(nDPN)  ! Equation number (u, v)
     end type NodeType
 
-    ! define a type for element
-    type :: ElementType
-        integer          :: cn(4)      ! connectivity, nNPE
-        double precision :: thickness  ! thickness
-        double precision :: q(2)       ! distributed load in x- and y-directions, nDIM
-    end type ElementType
+    ! ElemType structure
+    type :: ElemType
+        integer          :: cn(nNPE)    ! Connectivity, nNPE
+        double precision :: q(nDIM)     ! Distributed load in x- and y-directions
+    end type ElemType
 
-    ! define a type for material
-    type :: MaterialType
-        double precision :: Young      ! Young's modulus
-        double precision :: Poisson    ! Poison's ratio
-    end type MaterialType
+    ! PropType structure
+    type :: PropType
+        double precision :: young       ! Young's modulus
+        double precision :: poisson     ! Poison's ratio
+        double precision :: thick       ! Thickness
+    end type PropType
+
+! ---------------------------------------------------------------------------------------
 
 end module Data_Struct

@@ -2,11 +2,12 @@
 ! =============================================================================
 !
 ! SATURN Educational Version
-! by Hyungmin Jun (hyungminjun@outlook.com)
+! Computational Systems Design Laboratory(CSDL)
+! by Hyungmin Jun(hjun@jbnu.ac.kr)
 !
 ! =============================================================================
 !
-! Copyright 2019 Hyungmin Jun. All rights reserved.
+! Copyright 2020 CSDL. All rights reserved.
 !
 ! License - GPL version 3
 ! This program is free software: you can redistribute it and/or modify it under
@@ -22,6 +23,7 @@
 !
 program SATURN_EDU
 
+    use Math_Kernel
     use Data_Struct
     use DISP4
     use Solver
@@ -29,16 +31,20 @@ program SATURN_EDU
     implicit none
 
     ! define internal variables
-    integer :: node_n, element_n                               ! # of nodes, # of elements
-    type (NodeType),    allocatable, dimension(:) :: Node      ! node
-    type (ElementType), allocatable, dimension(:) :: Element   ! element
-    type (MaterialType) :: Material                            ! material
+    integer :: node_n, element_n            ! # of nodes, # of elements
+    type(NodeType), allocatable :: node(:)  ! Node
+    type(ElemType), allocatable :: elem(:)  ! Element
+    type(PropType) :: prop                  ! Property
+    type(ProbType) :: prob                  ! Problem
 
-    integer :: total_dof_n, free_dof_n, fixed_dof_n              ! # of DOFs (total, free, fixed)
-    double precision, allocatable, dimension(:) :: Kt        ! stiffness vector
-    double precision, allocatable, dimension(:) :: U         ! diplacement vector
-    double precision, allocatable, dimension(:) :: R         ! load vector
-    integer,          allocatable, dimension(:) :: c_index    ! column index
+    integer :: dof(3)                       ! # of DOFs (total, free, fixed)
+    integer, allocatable :: maxa(:)         ! Addresses of diagonal elements
+    double precision, allocatable :: Kt(:)  ! Stiffness vector
+    double precision, allocatable :: U(:)   ! Diplacement vector
+    double precision, allocatable :: R(:)   ! Load vector
+    integer :: n_eq                         ! Number of equations
+    integer :: n_wk                         ! Number of elements below skyline of matrix
+    integer :: m_hbw                        ! Maximum half bandwidth
 
     call Main
 
@@ -48,69 +54,65 @@ contains
 
 ! Main subroutine
 subroutine Main()
-    character(len=20) :: filename
-    real :: t_main_start, t_main_end
-    real :: t_assemble_start, t_assemble_end
-    real :: t_solve_start, t_solve_end
 
-    call cpu_time(t_main_start)
+    ! Define variables
+    double precision :: ts_main, te_main, ts_assem, te_assem, ts_solve, te_solve
 
-    ! input file name
-    filename = "planestress"; print * 
-   
-    ! open files
-    open(unit=1, file=trim(filename)//".txt",     form="formatted")
-    open(unit=2, file=trim(filename)//"_out.txt", form="formatted")
-    open(unit=3, file=trim(filename)//"_res.txt", form="formatted")
-    open(unit=4, file=trim(filename)//"_pos.txt", form="formatted")
+    call cpu_time(ts_main)
 
-    ! read input file
+    ! Open files
+    open(unit=1, file="SATURN.txt",     form="formatted")
+    open(unit=2, file="SATURN_out.txt", form="formatted")
+    open(unit=3, file="SATURN_res.txt", form="formatted")
+    open(unit=4, file="SATURN_pos.txt", form="formatted")
+
+    ! Read input file
     !call Read_Input_File
     call Set2DQuadEleRectDomain
 
-    ! calculate # of total DOF, # of free DOF, # of fixed DOF and assign equation numbers
-    call Set_DOF_Number(total_dof_n, free_dof_n, fixed_dof_n)
-   
-    ! calculate column index
-    call Calculate_Index
-   
-    ! print information
-    call Print_Title(0)
-    
-    ! allocate memory
-    allocate( Kt( c_index(free_dof_n+1)-1 ) ) ! total stiffness vector (Kt)
-    allocate( U(total_dof_n) )                ! displacement vector
-    allocate( R(total_dof_n) )                ! load vector
-   
-    ! assemble total stiffness matrix
-    print *, "1/ Assembling Stiffness and Load"
-    call cpu_time(t_assemble_start)
-    call Assemble_Kt
+    ! # of DOFs and assign equation numbers
+    n_eq = Set_DOF_Number(node, dof)
 
-    ! assemble load vector
-    call Assemble_Load;     call cpu_time(t_assemble_end);      call cpu_time(t_solve_start)
+    ! Column index
+    call SKY_Index(node, elem, maxa, n_eq, n_wk, m_hbw)
+
+    ! Allocate memory
+    allocate(Kt(n_wk), U(dof(1)), R(dof(1)))
+
+    ! Print information
+    call Print_Information(prob, node, elem, prop, dof, n_eq, n_wk, m_hbw)
+
+    ! Assemble total stiffness matrix
+    write(0, "(a)"), " 1 - Assembling Stiffness and Load"
+    call cpu_time(ts_assem)
+    call Assemble_Kt(prob, node, elem, prop, Kt, maxa, n_eq)
+
+    ! Assemble load vector
+    call Assemble_Load(node, elem, prop, R)
+    call cpu_time(te_assem)
+    call cpu_time(ts_solve)
     
     ! slove linear system (find U in K*U=R)
     print *, "2/ Solving Linear System"
-    call Solve_Equations;   call cpu_time(t_solve_end)
+    call Solve_Equations
+    call cpu_time(te_solve)
 
     ! calculate stress and print solutions
     print *, "3/ Printing Output Files"
     call Displacement_Stress
 
     print *, "4/ Completed !"; print * 
-    print *, "Strain energy = ", 0.5d0 * dot_product(R(1:free_dof_n), U(1:free_dof_n))
+    print *, "Strain energy = ", 0.5d0 * dot_product(R(1:dof(2)), U(1:dof(2)))
     PRINT *, "Strain energy =   4.447735498387236E-008"
     ! deallocate memory
-    deallocate(Node, Element, Kt, R, U, c_index)
-    call cpu_time(t_main_end)
+    deallocate(node, elem, Kt, R, U, maxa)
+    call cpu_time(te_main)
 
     ! close files
     close(unit=1); close(unit=2); close(unit=3); close(unit=4)
     
-    call Print_TimeConsuming(0, t_main_end, t_main_start, t_assemble_end, t_assemble_start, t_solve_end, t_solve_start)
-
-    print *, ""; pause
+    ! Compute time-consuming
+    call Compute_Cost(te_main, ts_main, te_assem, ts_assem, te_solve, ts_solve)
 end subroutine Main
 
 ! --------------------------------------------------------------------------------
@@ -131,78 +133,92 @@ subroutine Read_Input_File()
 
     ! read elemental information
     read(1,*) bufs; read(1,*) element_n; read(1,*) bufs
-    allocate(Element(element_n)) ! allocate a element array
+    allocate(elem(element_n)) ! allocate a element array
     
     do i=1, element_n
-        read(1,*) bufi, Element(i).cn(:), Element(i).q(:)
+        read(1,*) bufi, elem(i).cn(:), elem(i).q(:)
     end do
 
     ! read properties
     read(1,*) bufs; read(1,*) thickness
-    Element(:).thickness = thickness
-    read(1,*) bufs; read(1,*) Material.Young
-    read(1,*) bufs; read(1,*) Material.Poisson
+    prop.thick = thickness
+    read(1,*) bufs; read(1,*) prop.young
+    read(1,*) bufs; read(1,*) prop.poisson
 end subroutine Read_Input_File
 
 ! --------------------------------------------------------------------------------
 
-! calculate # of total DOF, # of free DOF, # of fixed DOF and assign equation numbers to DOFs
-subroutine Set_DOF_Number(tn, fn, cn)
-    integer, intent(out) :: tn, fn, cn  ! # of total DOF, # of free DOF, # of fixed DOF
-    integer :: i, j
+! # of DOFs and assign equation numbers to DOFs
+! dof(1): # of total DOFs, dof(2): # of free DOFs, dof(3): # of fixed DOFs
+function Set_DOF_Number(node, dof) result(n_eq)
+    type(NodeType), intent(inout) :: node(:)
+    integer, intent(out) :: dof(3)
+
+    integer :: i, j, n_eq
 
     write(3, *) "EQUATION NUMBER"
     write(3, *) "---------------------"
     write(3, *) "    node   dof    eqn"
 
-    tn = node_n * nDPN  ! # of total DOF
-    fn = 0; cn = 0
+    dof(1) = size(node) * nDPN
+    dof(2) = 0
+    dof(3) = 0
 
-    do i=1, node_n
-        do j=1, nDPN
-            if (Node(i).bc(j) == 0) then
-                fn = fn + 1
-                Node(i).eq_n(j) = fn
-                write(3, "(3i7)") i, j, fn
+    do i = 1, size(node)
+        do j = 1, nDPN
+            if (node(i)%bc(j) == 0) then
+                dof(2) = dof(2) + 1
+                node(i)%eq_n(j) = dof(2)
+                write(3, "(3i7)") i, j, dof(2)
             else
-                cn = cn + 1
-                Node(i).eq_n(j) = tn - cn + 1
+                dof(3) = dof(3) + 1
+                node(i)%eq_n(j) = dof(1) - dof(3) + 1
             end if
         end do
     end do
     write(3, *)
-end subroutine Set_DOF_Number
+
+    n_eq = dof(2)
+end function Set_DOF_Number
 
 ! --------------------------------------------------------------------------------
 
-! calculate column index for skyline solver
-subroutine Calculate_Index()   
-    integer :: column_h(total_dof_n) ! column height
-    integer :: a_index(nDPN * nNPE)  ! index for assemblage
-    integer :: i, j, k               ! index for iteration
-    integer :: buf_sum
+! Calculate column index
+subroutine SKY_Index(node, elem, maxa, n_eq, n_wk, m_hbw)
+    integer, allocatable, intent(out) :: maxa(:)
+    type(NodeType), intent(in) :: node(:)
+    type(ElemType), intent(in) :: elem(:)
+    integer, intent(in)  :: n_eq
+    integer, intent(out) :: n_wk
+    integer, intent(out) :: m_hbw
 
-    ! allocate c_index array
-    allocate ( c_index(free_dof_n+1) )
+    integer, allocatable :: column_h(:)
+    integer, allocatable :: a_index(:)
+    integer :: i, j, k, n_elem
+ n_elem = size(elem)
 
-    ! column height
+    ! Allocate maxa array
+    allocate(column_h(n_eq))
+    allocate(a_index(nDPN*nNPE))
+    allocate(maxa(n_eq+1))
+
     column_h(:) = 0
 
-    do i=1, element_n
+    do i = 1, n_elem
 
-        ! assemblage index
-        do j=1, nDPN
-            do k=1, nNPE
-                a_index( nNPE * j + k - nNPE ) = node( element(i).cn(k) ).eq_n(j)
+        ! Assemblage index
+        do j = 1, nDPN
+            do k = 1, nNPE
+                a_index(nNPE*j+k-nNPE) = node(elem(i)%cn(k))%eq_n(j)
             end do
         end do
 
-        ! column height
-        do k=1, nDPN * nNPE
-            do j=1, nDPN * nNPE
-                if(a_index(j) <= free_dof_n .and. a_index(k) <= free_dof_n) then
-                    if( a_index(j) < a_index(k) ) then
-                        if( a_index(k) - a_index(j) > column_h(a_index(k)) ) then
+        ! Column height
+        do k = 1, nDPN * nNPE
+            do j = 1, nDPN * nNPE
+                if(a_index(j) <= n_eq .and. a_index(k) <= n_eq) then
+                    if(a_index(j) < a_index(k)) then
+                        if(a_index(k)-a_index(j) > column_h(a_index(k))) then
                             column_h(a_index(k)) = a_index(k) - a_index(j)
                         end if
                     end if
@@ -211,100 +227,131 @@ subroutine Calculate_Index()
         end do
     end do
 
-    ! c_index array
-    buf_sum = 1
-
-    do i=1, free_dof_n
-        c_index(i) = buf_sum
-        buf_sum = buf_sum + Column_H(i) + 1
+    ! maxa array
+    do i = 1, n_eq + 1
+        maxa(i) = 0
     end do
 
-    c_index(free_dof_n+1) = buf_sum
-    write(3,"(a18, E14.6, a3)") "REQUIRED MEMORY =", buf_sum * 8.0d0 / 1000000.d0, " MB"
-    write(3,*)
-end subroutine Calculate_Index
+    maxa(1) = 1
+    maxa(2) = 2
+    m_hbw   = 0
+    if(n_eq > 1) then
+        do i = 2, n_eq
+            if(column_h(i) > m_hbw) m_hbw = column_h(i)
+            maxa(i + 1) = maxa(i) + column_h(i) + 1
+        end do
+    end if
+
+    m_hbw = m_hbw + 1
+    n_wk  = maxa(n_eq + 1) - maxa(1)
+
+    ! Deallocate
+    deallocate(column_h)
+    deallocate(a_index)
+end subroutine SKY_Index
 
 ! --------------------------------------------------------------------------------
 
-! assemble total stiffness matrix by using equation numbers
-subroutine Assemble_Kt()
-    double precision :: eNode(nNPE,nDIM)                ! nodal position of 4-node element (x,y)
-    double precision :: Ke(nNPE * nDPN,nNPE * nDPN)     ! stifness matrix of element
-    integer :: a_index(nNPE * nDPN)                      ! assemblage index
+! Assemble total stiffness matrix
+subroutine Assemble_Kt(prob, node, elem, prop, Kt, maxa, n_eq)
+    type(NodeType), intent(in) :: node(:)
+    type(ElemType), intent(in) :: elem(:)
+    type(PropType), intent(in) :: prop
+    type(ProbType), intent(in) :: prob
+    double precision, intent(out) :: Kt(:)
+    integer, intent(in) :: maxa(:)
+    integer, intent(in) :: n_eq
+
+    double precision, allocatable :: Ke(:,:)
+    integer, allocatable :: a_index(:)
+    double precision :: eNode(nNPE, nDIM)
     integer :: i, j, k, address
+
+    allocate(Ke(nDPN*nNPE, nDPN*nNPE))
+    allocate(a_index(nDPN*nNPE))
 
     Kt(:) = 0.0d0
 
-    do i=1, element_n
+    ! Assemble stiffness matrix
+    do i = 1, size(elem)
 
-        ! nodal position of element
-        do j=1, nNPE
-            do k=1, nDIM
-                eNode(j, k) = Node( Element(i).cn(j) ).x(k)
+        ! Nodal position of elements
+        do j = 1, nNPE
+            do k = 1, nDIM
+                eNode(j, k) = node(elem(i)%cn(j))%x(k)
             end do
         end do
 
-        ! calculate stiffness matrix of element
-        call Plane_Stiffness(Material.Young, Material.Poisson, Element(i).thickness, eNode, Ke)
-        !write(2,"(a24,i4)") " STIFFNESS of ELEMENT : ", i
-        !call Print_Matrix(Ke)
+        ! Planestress element stiffness matrix
+        call Plane_Stiffness(prop.young, prop.poisson, prop.thick, eNode, Ke)
 
-        ! assemblage index
-        do j=1, nDPN
-            do k=1, nNPE
-                a_index( nNPE * j + k - nNPE ) = node( element(i).cn(k) ).eq_n(j)
+        ! Print all element stiffness
+        !call Print_Matrix(i, Ke)
+
+        ! Assemblage index
+        do j = 1, nDPN
+            do k = 1, nNPE
+                a_index(nNPE*j+k-nNPE) = node(elem(i)%cn(k))%eq_n(j)
             end do
         end do
 
-        ! assemble total stiffness matrix
-        do j=1, nNPE * nDPN
-            do k=1, nNPE * nDPN
-                if(a_index(j) <= free_dof_n .and. a_index(k) <= free_dof_n) then
-                    if( a_index(j) <= a_index(k) ) then
-                        address = c_index(a_index(k)) + a_index(k) - a_index(j)
+        ! Assemble stiffness matrix
+        do j = 1, nDPN * nNPE
+            do k = 1, nDPN * nNPE
+                if(a_index(j) <= n_eq .and. a_index(k) <= n_eq) then
+                    if(a_index(j) <= a_index(k)) then
+                        address = maxa(a_index(k)) + a_index(k) - a_index(j)
                         Kt(address) = Kt(address) + Ke(j, k)
                     end if
                 end if
             end do
         end do
     end do
+
+    ! Deallocate memory
+    deallocate(Ke, a_index)
 end subroutine Assemble_Kt
 
 ! --------------------------------------------------------------------------------
 
 ! assemble load vector
-subroutine Assemble_Load()
-    double precision :: eNode(nNPE,nDIM)
-    double precision :: NodalLoad(nNPE * nDPN)  ! equivalent nodal load
+subroutine Assemble_Load(node, elem, prop, R)
+    type(NodeType),   intent(in)  :: node(:)
+    type(ElemType),   intent(in)  :: elem(:)
+    type(PropType),   intent(in)  :: prop
+    double precision, intent(out) :: R(:)
+
+    double precision :: eNode(nNPE, nDIM)
+    double precision :: NodalLoad(nDPN*nNPE)    ! Equivalent nodal load
     integer :: i, j, k
 
     R(:) = 0
 
-    ! assemble load vector for nodal load
-    do i=1, node_n
-        do j=1, nDPN
-            R(Node(i).eq_n(j)) = Node(i).pm(j)
+    ! Assemble load vector for nodal load
+    do i = 1, size(node)
+        do j = 1, nDPN
+            R(node(i)%eq_n(j)) = node(i)%pm(j)
         end do
     end do
 
-    ! assemble load vector for body force
-    do i=1, element_n
+    ! Assemble load vector for body force
+    do i = 1, size(elem)
 
-        ! nodal position of element
-        do j=1, nNPE
-            do k=1, nDIM
-                eNode(j, k) = Node( Element(i).cn(j) ).x(k)
+        ! Nodal position of elements
+        do j = 1, nNPE
+            do k = 1, nDIM
+                eNode(j,k) = node(elem(i)%cn(j))%x(k)
             end do
         end do
 
-        ! calculate equivalent nodal load from body force
-        call Plane_Load(eNode, Element(i).q, NodalLoad)
+        ! Calculate equivalent nodal load from body force
+        call Plane_Load(eNode, elem(i).q, NodalLoad)
 
-        ! assemble load vector
-        do j=1, nDPN
-            do k=1, nNPE
-                R( Node( Element(i).cn(k) ).eq_n(j) ) = R( Node( Element(i).cn(k) ).eq_n(j) ) &
-                    + NodalLoad(nNPE*j+k-nNPE)
+        ! Assemble load vector
+        do j = 1, nDPN
+            do k = 1, nNPE
+                R(Node(elem(i).cn(k)).eq_n(j)) &
+                    = R(Node(elem(i).cn(k)).eq_n(j)) + NodalLoad(nNPE*j+k-nNPE)
             end do
         end do
     end do
@@ -317,11 +364,11 @@ subroutine Solve_Equations()
     integer :: i
 
     U(:) = 0.0d0; i=3
-    U(1:free_dof_n) = R(1:free_dof_n)
-    call Skyline_COLSOL(Kt(1:c_index(free_dof_n+1)-1), U(1:free_dof_n), c_index(1:free_dof_n+1), &
-        free_dof_n,  c_index(free_dof_n+1)-1, free_dof_n+1, 1, i)
-    call Skyline_COLSOL(Kt(1:c_index(free_dof_n+1)-1), U(1:free_dof_n), c_index(1:free_dof_n+1), &
-        free_dof_n,  c_index(free_dof_n+1)-1, free_dof_n+1, 2, i)
+    U(1:dof(2)) = R(1:dof(2))
+    call Skyline_COLSOL(Kt(1:maxa(dof(2)+1)-1), U(1:dof(2)), maxa(1:dof(2)+1), &
+        dof(2),  maxa(dof(2)+1)-1, dof(2)+1, 1, i)
+    call Skyline_COLSOL(Kt(1:maxa(dof(2)+1)-1), U(1:dof(2)), maxa(1:dof(2)+1), &
+        dof(2),  maxa(dof(2)+1)-1, dof(2)+1, 2, i)
 end subroutine Solve_Equations
 
 ! --------------------------------------------------------------------------------
@@ -335,7 +382,7 @@ subroutine Displacement_Stress()
     integer :: i, j, k
    
     ! print strain energy
-    write(3,"(a17, E14.6)") "STRAIN ENERGY = ", 0.5d0 * dot_product(R(1:free_dof_n), U(1:free_dof_n))
+    write(3,"(a17, E14.6)") "STRAIN ENERGY = ", 0.5d0 * dot_product(R(1:dof(2)), U(1:dof(2)))
     write(4,*) element_n
 
     ! set scaling factor for the plotting
@@ -372,19 +419,19 @@ subroutine Displacement_Stress()
         ! nodal position of element
         do j=1, nNPE
             do k=1, nDIM
-                eNode(j, k) = Node( Element(i).cn(j) ).x(k)
+                eNode(j, k) = Node( elem(i).cn(j) ).x(k)
             end do
         end do
       
         ! displacement vector of element 
         do j=1, nDPN
             do k=1, nNPE
-                displace(nNPE * j + k - nNPE) = U( Node( Element(i).cn(k) ).eq_n(j) )
+                displace(nNPE * j + k - nNPE) = U( Node( elem(i).cn(k) ).eq_n(j) )
             end do
         end do
 
         ! calculate stress of element
-        call Plane_Stress(Material.Young, Material.Poisson, eNode, displace, Stress)
+        call Plane_Stress(prop.young, prop.poisson, eNode, displace, Stress)
       
         ! print stress
         write(3,"(a21,i4)") " STRESS of ELEMENT : ", i
@@ -420,42 +467,40 @@ end subroutine Print_Matrix
 
 ! --------------------------------------------------------------------------------
 
-subroutine Print_Title(n)
-    integer, intent(in) :: n
+! Print information
+subroutine Print_Information(prob, node, elem, prop, dof, n_eq, n_wk, m_hbw)
+    type(NodeType), intent(in) :: node(:)
+    type(ElemType), intent(in) :: elem(:)
+    type(PropType), intent(in) :: prop
+    type(ProbType), intent(in) :: prob
+    integer, intent(in) :: dof(3)
+    integer, intent(in) :: n_eq
+    integer, intent(in) :: n_wk
+    integer, intent(in) :: m_hbw
 
-    write(n,*) "[SATURN Educational Ver.]"
-    write(n,*)
-    write(n,*) "--------------------------------------------------------------------"
-    write(n,"(a19, e10.3, a18, e10.3)") " Young's modulus : ", Material.Young, ", Possion ratio : ", Material.Poisson
-    write(n,"(a13, e10.3)") " thickness : ",Element(1).thickness
-    write(n,"(a20, i8, a19, i8)") " # total elements : ", element_n, ",  # total nodes : ", node_n
-    write(n,"(a16, i6, a17, i6, a16, i6)") " # total DOFs : ", total_dof_n, ",  # free DOFs : ", free_dof_n, ",  # fix DOFs : ", fixed_dof_n
-    write(n,"(a19, e10.3, a3)") " required memory = ", c_index(free_dof_n+1) * 8.0d0 / 1024.0d0 / 1024.0d0, " MB"
-    write(n,*) "--------------------------------------------------------------------"
-    write(n,*)
-
-end subroutine Print_Title
-
-! --------------------------------------------------------------------------------
-
-subroutine Print_TimeConsuming(n, m_end, m_start, a_end, a_start, s_end, s_start)
-    integer, intent(in) :: n
-    real, intent(in) :: m_end, m_start, a_end, a_start, s_end, s_start
-    real :: consuming_m, consuming_a, consuming_s
-      
-    consuming_m	= m_end - m_start
-	consuming_a	= a_end - a_start
-	consuming_s	= s_end - s_start
-   
-    write(n,*)
-    write(n,"(a19, e10.3, a8, e10.3, a8, e10.3, a5)") " time consuming : ", consuming_m, "[sec], ", &
-                                                       consuming_m/60.0d0, "[min], ", consuming_m/60.0d0/60.0d0, "[hr]"
-    write(n,"(a19, e10.3, a8, e10.3, a8, e10.3, a5)") " assembling time : ", consuming_a, "[sec], ", &
-                                                       consuming_a/60.0d0, "[min], ", consuming_a/60.0d0/60.0d0, "[hr]"
-    write(n,"(a19, e10.3, a8, e10.3, a8, e10.3, a5)") " solving time : ", consuming_s, "[sec], ", &
-                                                       consuming_s/60.0d0, "[min], ", consuming_s/60.0d0/60.0d0, "[hr]"
-
-end subroutine Print_TimeConsuming
+    write(0, "(a)"), " [SATURN Edu. Ver.]"
+    write(0, "(a)")
+    write(0, "(a)"), " ===================================================================="
+    write(0, "(a)")
+    write(0, "(a$)"), " Problem name: "//trim(prob%name)
+    write(0, "(a$)"), ", Domain size: "//trim(adjustl(Int2Str(prob%n_domain)))
+    write(0, "(a$)"), " Problem : "//trim(adjustl(prob%name))
+    write(0, "(a)"), " Young's modulus: "//trim(adjustl(ES2Str(prop%Young, 9,3)))//&
+                     ", Poisson ratio: "//trim(adjustl(Dble2Str(prop%Poisson, 8,4)))//&
+                     ", thickness: "//trim(adjustl(Dble2Str(prop%thick, 8,4)))
+    write(0, "(a)"), " # total elements: "//trim(adjustl(Int2Str(size(elem))))//&
+                     ", # total nodes: "//trim(adjustl(Int2Str(size(node))))
+    write(0, "(a)"), " # total DOFs: "//trim(adjustl(Int2Str(dof(1))))//&
+                     ", # free DOFs: "//trim(adjustl(Int2Str(dof(2))))//&
+                     ", # fixed DOFs: "//trim(adjustl(Int2Str(dof(3))))
+    write(0, "(a$)")," # of equations = "//trim(adjustl(Int2Str(n_eq)))//","
+    write(0, "(a )")," # of matrix elements = "//trim(adjustl(Int2Str(n_wk)))
+    write(0, "(a$)")," Max. half bandwidth = "//trim(adjustl(Int2Str(m_hbw)))//","
+    write(0, "(a)"), " Required memory = "//trim(adjustl(Dble2Str(real(n_wk)*8.0d0/1024.0d0/1024.0d0, 10, 3)))//" MB"
+    write(0, "(a)")
+    write(0, "(a)"), " ===================================================================="
+    write(0, "(a)")
+end subroutine Print_Information
 
 ! --------------------------------------------------------------------------------
 
@@ -497,7 +542,7 @@ subroutine Set2DQuadEleRectDomain()
     element_n   = n_i_element * n_j_element
 
     allocate(Node(node_n))         ! allocate a node array 
-    allocate(Element(element_n))   ! allocate a element array
+    allocate(elem(element_n))   ! allocate a element array
     
     do i = 1, node_n
         Node(i).bc(:) = 0
@@ -506,7 +551,7 @@ subroutine Set2DQuadEleRectDomain()
     end do
      
     do i = 1, element_n
-        Element(i).q(:) = 0.0d0
+        elem(i).q(:) = 0.0d0
     end do
     
     ! set nodal position
@@ -523,10 +568,10 @@ subroutine Set2DQuadEleRectDomain()
         do i = 1, n_i_element
             numbering = n_i_element * (j - 1) + i
 
-            Element(numbering).cn(1)	= n_i_node * (j - 1) + i
-            Element(numbering).cn(2)	= n_i_node * (j - 1) + i + 1
-            Element(numbering).cn(3)	= n_i_node * j + i + 1
-            Element(numbering).cn(4)	= n_i_node * j + i
+            elem(numbering).cn(1)	= n_i_node * (j - 1) + i
+            elem(numbering).cn(2)	= n_i_node * (j - 1) + i + 1
+            elem(numbering).cn(3)	= n_i_node * j + i + 1
+            elem(numbering).cn(4)	= n_i_node * j + i
         end do
     end do
 
@@ -540,17 +585,46 @@ subroutine Set2DQuadEleRectDomain()
 	end do
 
 	! set body force
-    Element(:).q(1) = bxforce
-    Element(:).q(2) = byforce
+    elem(:).q(1) = bxforce
+    elem(:).q(2) = byforce
 
     ! set thickness
-    Element(:).thickness = thick
+    prop.thick = thick
 
 	! set properties
-	Material.Young		= young
-	Material.Poisson	= possion
+	prop.young		= young
+	prop.poisson	= possion
 
 end subroutine Set2DQuadEleRectDomain
+
+! --------------------------------------------------------------------------------
+
+! Print computational cost
+subroutine Compute_Cost(m_end, m_start, a_end, a_start, s_end, s_start)
+    double precision, intent(in) :: m_end, m_start, a_end, a_start, s_end, s_start
+
+    double precision :: cost_m, cost_a, cost_s
+
+    cost_m = m_end - m_start
+    cost_a = a_end - a_start
+    cost_s = s_end - s_start
+
+    write(0, "(a)")
+    write(0, "(a)"), " [Computational cost]"
+    write(0, "(a, a15, a)"), " 1. Total     : ", &
+        trim(adjustl(Dble2Str((cost_m), 7, 2)))//"[sec], ", &
+        trim(adjustl(Dble2Str((cost_m/60.0d0), 7, 2)))//"[min], "//&
+        trim(adjustl(Dble2Str((cost_m/60.0d0/60.0d0), 6, 2)))//"[hr]"
+    write(0, "(a, a15, a)"), " 2. Assembling: ", &
+        trim(adjustl(Dble2Str((cost_a), 7, 2)))//"[sec], ", &
+        trim(adjustl(Dble2Str((cost_a/60.0d0), 7, 2)))//"[min], "//&
+        trim(adjustl(Dble2Str((cost_a/60.0d0/60.0d0), 6, 2)))//"[hr]"
+    write(0, "(a, a15, a)"), " 3. Solving   : ", &
+        trim(adjustl(Dble2Str((cost_s), 7, 2)))//"[sec], ", &
+        trim(adjustl(Dble2Str((cost_s/60.0d0), 7, 2)))//"[min], "//&
+        trim(adjustl(Dble2Str((cost_s/60.0d0/60.0d0), 6, 2)))//"[hr]"
+    write(0, "(a)")
+end subroutine Compute_Cost
 
 ! --------------------------------------------------------------------------------
 
