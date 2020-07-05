@@ -28,14 +28,6 @@ module Data_Struct
     integer, parameter :: nDIM = 2      ! Problem dimension
     integer, parameter :: nGP  = 2      ! # of Gauss points
 
-    ! Problem structure
-    type :: ProbType
-        character(100) :: name = trim("SATURN")
-        character(100) :: path
-        integer        :: n_prob
-        integer        :: n_domain
-    end type
-
     ! NodeType structure
     type :: NodeType
         double precision :: x(nDIM)     ! Nodal position (x, y)
@@ -46,7 +38,7 @@ module Data_Struct
 
     ! ElemType structure
     type :: ElemType
-        integer          :: cn(nNPE)    ! Connectivity, nNPE
+        integer          :: cn(nNPE)    ! Connectivity
         double precision :: q(nDIM)     ! Distributed load in x- and y-directions
     end type ElemType
 

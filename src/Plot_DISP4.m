@@ -1,7 +1,7 @@
 clear all;
 
 % Open file for post processing, fid is file pointer
-fid = fopen('planestress_pos.txt','r');
+fid = fopen('SATURN_pos.txt','r');
 n = fscanf(fid,'%i',1);
 scalefactor = fscanf(fid,'%g',1);
 

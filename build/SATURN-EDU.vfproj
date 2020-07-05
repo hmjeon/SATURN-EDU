@@ -29,7 +29,6 @@
 		<Filter Name="Source Files" Filter="f90;for;f;fpp;ftn;def;odl;idl">
 		<File RelativePath="..\src\Data_Struct.f90"/>
 		<File RelativePath="..\src\DISP4.f90"/>
-		<File RelativePath="..\src\Math_Kernel.f90"/>
 		<File RelativePath="..\src\SATURN.f90"/>
 		<File RelativePath="..\src\Solver.f90"/></Filter></Files>
 	<Globals/></VisualStudioProject>
