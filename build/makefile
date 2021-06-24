@@ -17,10 +17,7 @@
 #   make sure that you understand the individual optimization options
 #   that are enabled by option fast.
 
-objects = Data_DNA.o Data_Geom.o Data_Mesh.o Data_Prob.o \
-	Para.o List.o Math.o Mani.o SpanTree.o Importer.o \
-	Exam_PERDIX.o Exam_METIS.o Exam_DAEDALUS2.o Exam_TALOS.o \
-	Section.o Input.o ModGeo.o Basepair.o Route.o SeqDesign.o Output.o METIS.o
+objects = Data_Struct.o DISP4.o Solver.o SATURN.o
 
 f90comp = ifort
 
@@ -28,15 +25,15 @@ f90comp = ifort
 SATURN-EDU: $(objects)
 	$(f90comp) -o SATURN-EDU $(objects)
 
-DISP4.mod: DISP4.o DISP4.f90
-	$(f90comp) -c DISP4.f90
-DISP4.o: DISP4.f90
-	$(f90comp) -c DISP4.f90
-
 Data_Struct.mod: Data_Struct.o Data_Struct.f90
 	$(f90comp) -c Data_Struct.f90
 Data_Geom.o: Data_Struct.f90
 	$(f90comp) -c Data_Struct.f90
+	
+DISP4.mod: DISP4.o DISP4.f90
+	$(f90comp) -c DISP4.f90
+DISP4.o: DISP4.f90
+	$(f90comp) -c DISP4.f90
 
 Solver.mod: Solver.o Solver.f90
 	$(f90comp) -c Solver.f90
