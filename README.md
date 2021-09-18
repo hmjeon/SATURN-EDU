@@ -13,11 +13,10 @@
 ```git clone https://github.com/hmjeon/SATURN-EDU.git```</br>
 
 **Requirements to compile from source:**</br>
-[Intel Fortran compiler](https://software.intel.com/en-us/fortran-compilers): Intel Parallel Studio XE 2016, 2017 or 2018</br>
+[Intel Fortran compiler](https://software.intel.com/en-us/fortran-compilers): Intel Parallel Studio XE 2017, 2018, or later</br>
 
 - Compiling the SATURN-EDU sources require [Intel Fortran](https://software.intel.com/en-us/fortran-compilers). Free Intel (R) Software Development Tools are available for qualified students, educators, academic researchers and open source contributors, see the [details](https://software.intel.com/en-us/qualify-for-free-software/).</br>
 - The Intel Fortran compiler supports all of the features of the Fortran 90, Fortran 95, Fortran 2003 standards and most of Fortran 2008. It also supports some draft Fortran 2018 features.
-- We provide [MakeFile](./build/Makefile) which is a simple way to organize code compilation of MERCURY-MITC4.</br></br>
 
 ## Author</br>
 Dr. Hyungmin Jun ([hjun@jbnu.ac.kr](mailto:hjun@jbnu.ac.kr)), [Web](https://msdl.jbnu.ac.kr)</br></br>
